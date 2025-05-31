@@ -115,7 +115,6 @@ public class TelegramBotHostedService : BackgroundService
                 await botClient.SendMessage(callbackChatId, "✅ Запись успешно отменена!");
                 await botClient.AnswerCallbackQuery(callback.Id);
 
-                // Показываем обновлённый список записей
                 var lessons = callbackLessonService.GetLessonsByStudent(studentId);
                 if (lessons.Count > 0)
                 {
@@ -136,12 +135,10 @@ public class TelegramBotHostedService : BackgroundService
         var message = update.Message;
         var chatId = message.Chat.Id;
         
-        // Проверка авторизации пользователя: если уже есть studentId в VerifiedUsers, сразу считаем авторизованным
         if (!UserStates.ContainsKey(chatId))
             UserStates[chatId] = new UserState();
         var state = UserStates[chatId];
 
-        // Если пользователь уже верифицирован, сразу подтягиваем studentId в state
         if (VerifiedUsers.ContainsKey(chatId))
         {
             state.StudentId = int.Parse(VerifiedUsers[chatId]);
@@ -149,13 +146,11 @@ public class TelegramBotHostedService : BackgroundService
 
         if (message.Text == "/start")
         {
-            // Проверяем, есть ли студент с этим TelegramId в базе
             var student = studentService.GetStudentByTelegramId((int)chatId);
             if (student != null)
             {
                 state.StudentId = student.Id;
                 VerifiedUsers[chatId] = student.Id.ToString();
-                // Показываем личный кабинет с кнопками
                 var kb = new ReplyKeyboardMarkup(new[]
                 {
                     new[] { new KeyboardButton("📝 Записаться") },
@@ -174,7 +169,6 @@ public class TelegramBotHostedService : BackgroundService
             return;
         }
 
-        // Обработка личного кабинета
         if (VerifiedUsers.ContainsKey(chatId) &&
             (message.Text == "Личный кабинет" ||
              message.Text == "Мои записи" || message.Text == "📋 Мои записи" ||
@@ -201,7 +195,6 @@ public class TelegramBotHostedService : BackgroundService
             }
             if (message.Text == "📝 Записаться" || message.Text == "Записаться")
             {
-                // Сбросить state и начать сценарий записи
                 state.Reset();
                 state.StudentId = studentId;
                 var subjects = subjectService.GetSubjects();
@@ -297,9 +290,7 @@ public class TelegramBotHostedService : BackgroundService
                 }
                 var code = new Random().Next(1000, 9999).ToString();
                 PendingCodes[chatId] = code;
-                // Формируем номер для CallMeBot: только цифры, без плюса
                 var phoneForApi = state.Phone.Replace("+", "");
-                // Экранируем текст
                 var text = Uri.EscapeDataString($"Ваш код: {code}");
                 var url = $"https://api.callmebot.com/whatsapp.php?phone={phoneForApi}&text={text}&apikey={CallMeBotApiKey}";
                 try
@@ -331,7 +322,6 @@ public class TelegramBotHostedService : BackgroundService
                 state.StudentId = student.Id;
                 VerifiedUsers[chatId] = student.Id.ToString(); // сохраняем studentId как признак верификации
                 PendingCodes.Remove(chatId);
-                // Затем создаём запись на занятие
                 var slotToBook = slotService.GetSlotById(state.SelectedSlotId);
                 if (slotToBook == null || slotToBook.IsBooked)
                 {
@@ -339,7 +329,6 @@ public class TelegramBotHostedService : BackgroundService
                     state.Step = 2;
                     return;
                 }
-                // Бронируем все слоты этого учителя на это время (по всем предметам)
                 var allSlotsThisTime = slotService.GetAvailableSlots(teacherService.GetTeacher().Id, null)
                     .Where(s => s.StartTime == slotToBook.StartTime && s.EndTime == slotToBook.EndTime && !s.IsBooked)
                     .ToList();
@@ -352,7 +341,6 @@ public class TelegramBotHostedService : BackgroundService
                 state.Reset();
                 break;
             default:
-                // Команды для просмотра и отмены записей
                 if (message.Text == "/mylessons")
                 {
                     if (!VerifiedUsers.ContainsKey(chatId))
@@ -392,15 +380,12 @@ public class TelegramBotHostedService : BackgroundService
                         await botClient.SendMessage(chatId, "Запись не найдена.");
                         return;
                     }
-                    // Освобождаем слот
                     var slot = slotService.GetSlotById(lesson.Id);
                     if (slot != null)
                     {
                         slot.IsBooked = false;
-                        // Сохраняем изменения
                         scope.ServiceProvider.GetRequiredService<TutorDbContext>().SaveChanges();
                     }
-                    // Удаляем занятие
                     scope.ServiceProvider.GetRequiredService<TutorDbContext>().Lessons.Remove(lesson);
                     scope.ServiceProvider.GetRequiredService<TutorDbContext>().SaveChanges();
                     await botClient.SendMessage(chatId, "Запись отменена.");
@@ -413,7 +398,6 @@ public class TelegramBotHostedService : BackgroundService
 
     private Task HandleErrorAsync(ITelegramBotClient botClient, Exception exception, CancellationToken ct)
     {
-        // Логирование ошибок
         return Task.CompletedTask;
     }
 
