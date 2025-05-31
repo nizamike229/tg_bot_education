@@ -6,6 +6,8 @@ using Telegram.Bot.Types.Enums;
 using Telegram.Bot.Types.ReplyMarkups;
 using tgBot.Services;
 using System.Text.RegularExpressions;
+using Microsoft.Extensions.Logging;
+using Telegram.Bot.Polling;
 using tgBot.Context;
 
 namespace tgBot;
@@ -14,16 +16,18 @@ public class TelegramBotHostedService : BackgroundService
 {
     private readonly ITelegramBotClient _botClient;
     private readonly IServiceProvider _serviceProvider;
+    private readonly ILogger<TelegramBotHostedService> _logger;
     private static readonly Dictionary<long, UserState> UserStates = new();
     private static readonly Dictionary<long, string> VerifiedUsers = new();
     private static readonly Dictionary<long, string> PendingCodes = new();
     private static readonly HttpClient httpClient = new();
     private const string CallMeBotApiKey = "6181691";
 
-    public TelegramBotHostedService(ITelegramBotClient botClient, IServiceProvider serviceProvider)
+    public TelegramBotHostedService(ITelegramBotClient botClient, IServiceProvider serviceProvider, ILogger<TelegramBotHostedService> logger)
     {
         _botClient = botClient;
         _serviceProvider = serviceProvider;
+        _logger = logger;
     }
 
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
@@ -31,7 +35,11 @@ public class TelegramBotHostedService : BackgroundService
         _botClient.StartReceiving(
             HandleUpdateAsync,
             HandleErrorAsync,
-            cancellationToken: stoppingToken
+            cancellationToken: stoppingToken,
+            receiverOptions: new ReceiverOptions
+            {
+                AllowedUpdates = [UpdateType.Message ,UpdateType.CallbackQuery]
+            }
         );
         await Task.Delay(-1, stoppingToken);
     }
@@ -45,6 +53,8 @@ public class TelegramBotHostedService : BackgroundService
         var subjectService = scope.ServiceProvider.GetRequiredService<SubjectService>();
         var slotService = scope.ServiceProvider.GetRequiredService<SlotService>();
         
+        _logger.LogInformation($"Получен update типа: {update.Type}");
+        
         if (update.Type == UpdateType.CallbackQuery)
         {
             var callback = update.CallbackQuery;
@@ -53,7 +63,7 @@ public class TelegramBotHostedService : BackgroundService
             var callbackStudentService = callbackScope.ServiceProvider.GetRequiredService<StudentService>();
             var callbackTeacherService = callbackScope.ServiceProvider.GetRequiredService<TeacherService>();
             var callbackLessonService = callbackScope.ServiceProvider.GetRequiredService<LessonService>();
-
+            
             if (callback.Data!.StartsWith("lesson_"))
             {
                 var studentId = int.Parse(VerifiedUsers[callbackChatId]);
