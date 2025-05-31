@@ -9,6 +9,7 @@ var builder = Host.CreateDefaultBuilder(args)
         BotBusinessLogic.ConfigureServices(services);
         services.AddSingleton<ITelegramBotClient>(new TelegramBotClient("7412325055:AAEmva3flztRdn0iXKkSg__qJGEpnjoiC98"));
         services.AddHostedService<TelegramBotHostedService>();
+        services.AddLogging();
     });
 
 await builder.RunConsoleAsync();
